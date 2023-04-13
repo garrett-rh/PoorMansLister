@@ -1,2 +1,2 @@
 # PoorMansLister
-A poor implenetation of `ls` so that I can learn some C
+A poor implementation of `ls` so that I can learn some C
