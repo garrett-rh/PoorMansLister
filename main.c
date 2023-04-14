@@ -1,89 +1,170 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <dirent.h>
 #include <string.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <pwd.h>
+#include <grp.h>
 
-int readFileOrDirectory (char *fileOrDirectory)
+#define MAX_FILES 100
+#define MAX_FILENAME_LENGTH 100
+
+typedef struct fileList
 {
-//TODO: Detect if a file is passed in
+  int length;
+  char **fileArray;
+}fileList;
 
+int getFileOwners(const char *file) 
+{
+  struct stat fileStat;
+  struct passwd *userInfo;
+  struct group *groupInfo;
+
+  if (stat(file, &fileStat) == 0)
+  {
+    __uid_t ownerId = fileStat.st_uid;
+    __gid_t groupId = fileStat.st_gid;
+
+    userInfo = getpwuid(ownerId);
+    if (userInfo == NULL) {
+      printf("%d", ownerId);
+    } else {
+      printf("%s", userInfo->pw_name);
+    }
+
+    printf(":");
+
+    groupInfo = getgrgid(groupId);
+    if (groupInfo == NULL) {
+      printf("%d", groupId);
+    } else {
+      printf("%s", groupInfo->gr_name);
+    }
+
+  } else {
+    fprintf(stderr, "Failed to get user/group owners.\n");
+    return 1;
+  }
+  return 0;
+}
+
+int getPermissions(const char *file)
+{
+  struct stat fileStat;
+  
+  if (stat(file, &fileStat) == 0)
+  {
+      __mode_t fileMode = fileStat.st_mode;
+      printf("%c%c%c", (fileMode & S_IRUSR) ? 'r' : '-', (fileMode & S_IWUSR) ? 'w' : '-', (fileMode & S_IXUSR) ? 'x' : '-');
+      printf("%c%c%c", (fileMode & S_IRGRP) ? 'r' : '-', (fileMode & S_IWGRP) ? 'w' : '-', (fileMode & S_IXGRP) ? 'x' : '-');
+      printf("%c%c%c ", (fileMode & S_IROTH) ? 'r' : '-', (fileMode & S_IWOTH) ? 'w' : '-', (fileMode & S_IXOTH) ? 'x' : '-');
+  } else {
+      fprintf(stderr, "Failed to read file permissions.\n");
+      return 1;
+  }
+  return 0;
+}
+
+const char *baseDir(char *baseDir, char *file)
+{
+  int baseDirLength = strlen(baseDir);
+  int filenameLength = strlen(file);
+  char *lastCharacter = &baseDir[baseDirLength- 1];
+  char *buffer = (char *)malloc(baseDirLength + 1 +filenameLength + 1);
+  
+  //int bufferSize = baseDirLength +  filenameLength + 1; // Plus 1 for nullbyte
+
+
+  if (strcmp(lastCharacter, "/")== 0)
+  {
+    sprintf(buffer, "%s%s", baseDir,file);
+  } else { 
+    sprintf(buffer,"%s/%s", baseDir,file);
+  }
+
+  return buffer;
+}
+
+struct fileList getFolderObjects(const char *location)
+{
   DIR *dp;
   struct dirent *ep;
+  struct fileList listing;
 
-  dp = opendir (fileOrDirectory);
+  dp = opendir (location);
+
+  listing.length = 0;
+  listing.fileArray = malloc(MAX_FILES + 1);
+  for (int i = 0; i < MAX_FILES; i++)
+  {
+    listing.fileArray[i] = malloc(MAX_FILENAME_LENGTH + 1);
+  }
 
   if (dp != NULL)
     {
       while ((ep = readdir (dp)))
       {
-        puts (ep->d_name);
+        if (strcmp(ep->d_name, ".") == 0 || strcmp(ep->d_name,"..") == 0) 
+        {
+          continue;
+        }
+        strncpy(listing.fileArray[listing.length], ep -> d_name, MAX_FILENAME_LENGTH - 1);
+        listing.fileArray[listing.length][MAX_FILENAME_LENGTH - 1] = '\0';
+        listing.length++;
+
+        if (listing.length >= MAX_FILES)
+        {
+          fprintf(stderr, "Reached max number of files");
+          break;
+        }
       }
-      (void) closedir (dp);
     }
   else {
-    fprintf (stderr, "Couldn't open the directory: %s", fileOrDirectory);
-    return 1;
+    fprintf (stderr, "Couldn't open the directory: %s", location);
+    exit(1);
   }
+  return listing;
+} 
 
-  return 0;
-}
-
-int noArgs(int argc, char *argv[])
-{
-  int i;
-  int j;
-  int equalsLength;
-
-
-  for (i = 1; i < argc; i++)
-  {
-    equalsLength = strlen(argv[i]);
-    printf("=============%s=============\n", argv[i]);
-    readFileOrDirectory(argv[i]);
-    printf("=============");
-    for (j = 0; j < equalsLength; j++) 
-    {
-      putchar('=');
-    }
-    printf("=============\n");
-  }
-
-  return 0;
-}
-
-void help(void){
+int help(void){
   printf("The following commands are supported in this bad version of 'ls'\n");
+  printf("\t-d:\tSpecify a directory to list (defaults to current working directory).\n");
   printf("\t-l:\tGives a listing of files and directories with permissions.\n");
-  printf("\t-s:\tGives a listing of files and directories sorted alphabetically.\n");
   printf("\t-h:\tPrints this help statement.\n");
-}
-int longList(void)
-{
-
   return 0;
 }
-void sort(void){}
+
+void printObjects(struct fileList objects) 
+{
+    for (int i = 0; i < objects.length; i++)
+    {
+      printf("%s\n", objects.fileArray[i]);
+    }
+}
 
 int main (int argc, char *argv[])
 {
 
   int c;
   int lFlag = 0;
-  int sFlag = 0;
+  int dFlag = 0;
+  char *directory;
 
-  while (( c = getopt ( argc, argv, "hls")) != -1 )
+  while (( c = getopt ( argc, argv, "d:hl")) != -1 )
   {
     switch (c) {
-      case 'h':
-        help();
-        break;
       case 'l':
         lFlag = 1;
         break;
-      case 's':
-        sFlag = 1;
+      case 'd':
+        dFlag = 1;
+        directory = optarg;
+        break;
+      case 'h':
+        help();
+        return 0;
         break;
       case '?':
         fprintf (stderr, "Unknown option. Use -h for help.\n");
@@ -92,24 +173,28 @@ int main (int argc, char *argv[])
     }
   }
 
-  printf("lflag: %d, sflag: %d\n", lFlag, sFlag);
-
-
-  if ( optind + 1 < argc )
+  if (dFlag == 0)
   {
-    fprintf (stderr, "Currently only accepts one file or folder.\n");
+    directory = ".";
   } 
-  else if ( optind == argc )
+
+  struct fileList objects = getFolderObjects(directory);
+
+  if (lFlag == 1)
   {
-    printf("=============.=============\n");
-    readFileOrDirectory(".");
-    printf("===========================\n");
-  } 
-  else
-  {
-    readFileOrDirectory(argv[optind]);
-    printf("This is where to action off the args\n");
+    for (int i = 0; i < objects.length; i++)
+    {
+      const char *file = baseDir(directory, objects.fileArray[i]); 
+      getPermissions(file);
+      printf(" ");
+      getFileOwners(file);
+      printf(" ");
+      printf("%s\n", file);
+    }
+    return 0;
   }
+
+  printObjects(objects);
 
   return 0;
 }
