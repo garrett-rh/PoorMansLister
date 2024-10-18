@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #define MAX_FILES 100
 #define MAX_FILENAME_LENGTH 100
