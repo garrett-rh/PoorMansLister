@@ -71,9 +71,6 @@ static const char *baseDir(char *baseDir, char *file) {
   char *lastCharacter = &baseDir[baseDirLength - 1];
   char *buffer = (char *)malloc(baseDirLength + 1 + filenameLength + 1);
 
-  // int bufferSize = baseDirLength +  filenameLength + 1; // Plus 1 for
-  // nullbyte
-
   if (strcmp(lastCharacter, "/") == 0) {
     sprintf(buffer, "%s%s", baseDir, file);
   } else {
@@ -175,7 +172,11 @@ int main(int argc, char *argv[]) {
       getFileOwners(file);
       printf(" ");
       printf("%s\n", file);
+
+      free((char*)file);
+      free(objects.fileArray[i]);
     }
+
     return 0;
   }
 
