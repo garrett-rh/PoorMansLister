@@ -15,7 +15,7 @@ typedef struct fileList {
   char **fileArray;
 } fileList;
 
-static int getFileOwners(const char *file) {
+int getFileOwners(const char *file) {
   struct stat fileStat;
   struct passwd *userInfo;
   struct group *groupInfo;
@@ -47,7 +47,7 @@ static int getFileOwners(const char *file) {
   return 0;
 }
 
-static int getPermissions(const char *file) {
+int getPermissions(const char *file) {
   struct stat fileStat;
 
   if (stat(file, &fileStat) == 0) {
@@ -65,9 +65,9 @@ static int getPermissions(const char *file) {
   return 0;
 }
 
-static const char *baseDir(char *baseDir, char *file) {
-  int baseDirLength = strlen(baseDir);
-  int filenameLength = strlen(file);
+char *baseDir(char *baseDir, char *file) {
+  size_t baseDirLength = strlen(baseDir);
+  size_t filenameLength = strlen(file);
   char *lastCharacter = &baseDir[baseDirLength - 1];
   char *buffer = (char *)malloc(baseDirLength + 1 + filenameLength + 1);
 
@@ -80,24 +80,25 @@ static const char *baseDir(char *baseDir, char *file) {
   return buffer;
 }
 
-static struct fileList getFolderObjects(const char *location) {
+struct fileList getFolderObjects(char *location) {
   DIR *dp;
   struct dirent *ep;
   struct fileList listing;
 
   dp = opendir(location);
 
-  listing.length = 0;
-  listing.fileArray = malloc((MAX_FILES + 1) * sizeof(char *));
-  for (int i = 0; i < MAX_FILES; i++) {
-    listing.fileArray[i] = malloc(MAX_FILENAME_LENGTH + 1);
-  }
-
   if (dp != NULL) {
+
+    listing.length = 0;
+    listing.fileArray = malloc((MAX_FILES + 1) * sizeof(char *));
+
     while ((ep = readdir(dp))) {
       if (strcmp(ep->d_name, ".") == 0 || strcmp(ep->d_name, "..") == 0) {
         continue;
       }
+
+      listing.fileArray[listing.length] = malloc(MAX_FILENAME_LENGTH + 1);
+
       strncpy(listing.fileArray[listing.length], ep->d_name,
               MAX_FILENAME_LENGTH);
       listing.fileArray[listing.length][MAX_FILENAME_LENGTH - 1] = '\0';
@@ -112,6 +113,7 @@ static struct fileList getFolderObjects(const char *location) {
     fprintf(stderr, "Couldn't open the directory: %s", location);
     exit(1);
   }
+  closedir(dp);
   return listing;
 }
 
@@ -166,16 +168,18 @@ int main(int argc, char *argv[]) {
 
   if (lFlag == 1) {
     for (int i = 0; i < objects.length; i++) {
-      const char *file = baseDir(directory, objects.fileArray[i]);
+      char *file = baseDir(directory, objects.fileArray[i]);
       getPermissions(file);
       printf(" ");
       getFileOwners(file);
       printf(" ");
       printf("%s\n", file);
 
-      free((char*)file);
+      free(file);
       free(objects.fileArray[i]);
     }
+
+    free(objects.fileArray);
 
     return 0;
   }
